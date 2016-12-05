@@ -71,7 +71,7 @@ sub mkvcbuild
 	  chklocale.c crypt.c fls.c fseeko.c getrusage.c inet_aton.c random.c
 	  srandom.c getaddrinfo.c gettimeofday.c inet_net_ntop.c kill.c open.c
 	  erand48.c snprintf.c strlcat.c strlcpy.c dirmod.c noblock.c path.c
-	  pgcheckdir.c pg_crc.c pgmkdirp.c pgsleep.c pgstrcasecmp.c pqsignal.c
+	  pg_strong_random.c pgcheckdir.c pg_crc.c pgmkdirp.c pgsleep.c pgstrcasecmp.c pqsignal.c
 	  mkdtemp.c qsort.c qsort_arg.c quotes.c system.c
 	  sprompt.c tar.c thread.c getopt.c getopt_long.c dirent.c
 	  win32env.c win32error.c win32setlocale.c);
@@ -658,7 +658,6 @@ sub mkvcbuild
 			'sha1.c',             'sha2.c',
 			'internal.c',         'internal-sha2.c',
 			'blf.c',              'rijndael.c',
-			'fortuna.c',          'random.c',
 			'pgp-mpi-internal.c', 'imath.c');
 	}
 	$pgcrypto->AddReference($postgres);
