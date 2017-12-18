@@ -30,6 +30,7 @@
 #include "catalog/pg_auth_time_constraint.h"
 #include "cdb/cdbvars.h"
 #include "commands/user.h"
+#include "common/scram-common.h"
 #include "libpq/auth.h"
 #include "libpq/crypt.h"
 #include "libpq/ip.h"
