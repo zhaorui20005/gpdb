@@ -43,11 +43,7 @@ OBJS += chklocale.o inet_net_ntop.o noblock.o pgstrcasecmp.o pqsignal.o \
 # libpgport C files that are needed if identified by configure
 OBJS += $(filter crypt.o getaddrinfo.o getpeereid.o inet_aton.o open.o system.o snprintf.o strerror.o strlcpy.o win32error.o win32setlocale.o, $(LIBOBJS))
 
-ifeq ($(enable_strong_random), yes)
 OBJS += pg_strong_random.o
-else
-OBJS += erand48.o
-endif
 
 # src/backend/utils/mb
 OBJS += encnames.o wchar.o
