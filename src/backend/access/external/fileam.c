@@ -45,6 +45,7 @@
 #include "catalog/pg_proc.h"
 #include "commands/copy.h"
 #include "commands/dbcommands.h"
+#include "commands/defrem.h"
 #include "libpq/libpq-be.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
@@ -89,7 +90,7 @@ static int	external_getdata_callback(void *outbuf, int datasize, void *extra);
 static int	external_getdata(URL_FILE *extfile, CopyState pstate, void *outbuf, int maxread);
 static void external_senddata(URL_FILE *extfile, CopyState pstate);
 static void external_scan_error_callback(void *arg);
-static void parseCustomFormatString(char *fmtstr, char **formatter_name, List **formatter_params);
+static List* parseCustomFormatString(char *fmtstr, char **formatter_name, List **formatter_params);
 static Oid lookupCustomFormatter(char *formatter_name, bool iswritable);
 static void justifyDatabuf(StringInfo buf);
 
@@ -278,8 +279,7 @@ external_beginscan(Relation relation, uint32 scancounter,
 	/* Parse fmtOptString here */
 	if (fmttype_is_custom(fmtType))
 	{
-		copyFmtOpts = NIL;
-		parseCustomFormatString(fmtOptString,
+		copyFmtOpts = parseCustomFormatString(fmtOptString,
 								&custom_formatter_name,
 								&custom_formatter_params);
 	}
@@ -648,8 +648,7 @@ external_insert_init(Relation rel)
 	/* Parse fmtOptString here */
 	if (fmttype_is_custom(extentry->fmtcode))
 	{
-		copyFmtOpts = NIL;
-		parseCustomFormatString(extentry->fmtopts,
+		copyFmtOpts = parseCustomFormatString(extentry->fmtopts,
 								&custom_formatter_name,
 								&custom_formatter_params);
 	}
@@ -963,10 +962,6 @@ externalgettup_custom(FileScanDesc scan)
 				appendBinaryStringInfo(&formatter->fmt_databuf, pstate->raw_buf, bytesread);
 				scan->raw_buf_done = false;
 			}
-
-			/* HEADER not yet supported ... */
-			if (pstate->header_line)
-				elog(ERROR, "header line in custom format is not yet supported");
 		}
 
 		/* while there is still data in our buffer */
@@ -2126,7 +2121,7 @@ error:
 				 errmsg("external table internal parse error at end of line")));
 }
 
-static void
+static List*
 parseCustomFormatString(char *fmtstr, char **formatter_name, List **formatter_params)
 {
 	char	   *token;
@@ -2134,7 +2129,9 @@ parseCustomFormatString(char *fmtstr, char **formatter_name, List **formatter_pa
 	char		nonstd_backslash = 0;
 	int			encoding = GetDatabaseEncoding();
 	List	   *l = NIL;
+	List       *l2 = NIL;
 	bool		formatter_found = false;
+	DefElem    *header_elem_p = NULL;
 
 	token = strtokx2(fmtstr, whitespace, NULL, NULL,
 					 0, false, true, encoding);
@@ -2166,6 +2163,14 @@ parseCustomFormatString(char *fmtstr, char **formatter_name, List **formatter_pa
 					*formatter_name = pstrdup(val);
 					formatter_found = true;
 				}
+				else if (pg_strcasecmp(key, "header") == 0)
+				{
+				        header_elem_p = makeDefElem(pstrdup(key_modified.data),
+									(Node *) makeString(pstrdup(val)));
+					l = lappend(l, header_elem_p);
+					if(defGetBoolean(header_elem_p))
+						l2 = lappend(l2, makeDefElem("header", (Node *)makeInteger(TRUE)));
+				}
 				else
 					l = lappend(l, makeDefElem(pstrdup(key_modified.data),
 									 (Node *) makeString(pstrdup(val))));
@@ -2186,7 +2191,7 @@ parseCustomFormatString(char *fmtstr, char **formatter_name, List **formatter_pa
 
 	*formatter_params = l;
 
-	return;
+	return l2;
 
 error:
 	if (token)
