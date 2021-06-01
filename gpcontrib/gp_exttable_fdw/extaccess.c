@@ -907,8 +907,8 @@ externalgettup_custom(FileScanDesc scan)
 				elog(ERROR, "header line in custom format is not yet supported");
 		}
 
-		/* while there is still data in our buffer */
-		while (pstate->raw_buf_len > 0)
+		/* while there is still data in our buffer or no data but formatter needs eof */
+		while (pstate->raw_buf_len > 0 || !pstate->reached_eof)
 		{
 			bool		error_caught = false;
 
@@ -961,6 +961,8 @@ externalgettup_custom(FileScanDesc scan)
 						formatter->fmt_databuf.cursor = formatter->fmt_databuf.len;
 					}
 				}
+				pstate->line_buf_converted = formatter->line_buf_converted;
+				pstate->cur_attname = formatter->cur_attname;
 
 				FILEAM_HANDLE_ERROR;
 				FlushErrorState();
@@ -1271,6 +1273,8 @@ FunctionCallPrepareFormatter(FunctionCallInfoBaseData *fcinfo,
 	formatter->fmt_needs_transcoding = pstate->need_transcoding;
 	formatter->fmt_conversion_proc = pstate->enc_conversion_proc;
 	formatter->fmt_external_encoding = pstate->file_encoding;
+	formatter->line_buf_converted = false;
+	formatter->cur_attname = NULL;
 
 	InitFunctionCallInfoData( /* FunctionCallInfoData */ *fcinfo,
 							  /* FmgrInfo */ formatter_func,

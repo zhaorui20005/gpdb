@@ -65,7 +65,8 @@ typedef struct FormatterData
 	bool			fmt_needs_transcoding;
 	FmgrInfo*		fmt_conversion_proc;
 	int				fmt_external_encoding;
-		
+	char*			cur_attname; /* error column name if not null */
+	bool 			line_buf_converted; /* enable formatter print text error data */
 } FormatterData;
 
 #define CALLED_AS_FORMATTER(fcinfo) \
@@ -134,5 +135,10 @@ typedef struct FormatterData
 		}\
 	} while (0)
 
+#define FORMATTER_SET_CURRENT_COLUMN(fcinfo, n) \
+	((((FormatterData*) fcinfo->context)->cur_attname) = n)
+
+#define FORMATTER_SET_PRINTABLE(fcinfo, n) \
+	((((FormatterData*) fcinfo->context)->line_buf_converted) = n)
 
 #endif /* FORMATTER_H */
