@@ -908,7 +908,7 @@ externalgettup_custom(FileScanDesc scan)
 		}
 
 		/* while there is still data in our buffer or no data but formatter needs eof */
-		while (pstate->raw_buf_len > 0 || !pstate->reached_eof)
+		while (pstate->raw_buf_len > 0 || pstate->reached_eof)
 		{
 			bool		error_caught = false;
 
