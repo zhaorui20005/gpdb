@@ -46,12 +46,6 @@ extern char *launcher;
 extern bool optimizer_enabled;
 extern bool resgroup_enabled;
 
-/*
- * This should not be global but every module should be able to read command
- * line parameters.
- */
-extern char *psqldir;
-
 extern const char *basic_diff_opts;
 extern const char *pretty_diff_opts;
 

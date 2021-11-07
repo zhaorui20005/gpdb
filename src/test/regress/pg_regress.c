@@ -52,7 +52,7 @@ typedef struct _resultmap
  * paths are only used in temp_install mode: we use these strings to find
  * out where "make install" will put stuff under the temp_install directory.
  * In non-temp_install mode, the only thing we need is the location of psql,
- * which we expect to find in psqldir, or in the PATH if psqldir isn't given.
+ * which we expect to find in bindir, or in the PATH if bindir isn't given.
  *
  * XXX Because pg_regress is not installed in bindir, we can't support
  * this for relocatable trees as it is.  --psqldir would need to be
@@ -94,7 +94,6 @@ bool		debug = false;
 char	   *inputdir = ".";
 char	   *outputdir = ".";
 char	   *prehook = "";
-char	   *psqldir = PGBINDIR;
 char	   *launcher = NULL;
 bool        print_failure_diffs_is_enabled = false;
 bool 		optimizer_enabled = false;
@@ -1289,9 +1288,6 @@ initialize_environment(void)
 
 		datadir = psprintf("%s/install/%s", temp_install, datadir);
 
-		/* psql will be installed into temp-install bindir */
-		psqldir = bindir;
-
 		/*
 		 * Set up shared library paths to include the temp install.
 		 *
@@ -1561,8 +1557,8 @@ psql_command(const char *database, const char *query,...)
 	/* And now we can build and execute the shell command */
 	snprintf(psql_cmd, sizeof(psql_cmd),
 			 "\"%s%spsql\" -X -c \"%s\" \"%s\"",
-			 psqldir ? psqldir : "",
-			 psqldir ? "/" : "",
+			 bindir ? bindir : "",
+			 bindir ? "/" : "",
 			 query_escaped,
 			 database);
 
@@ -2701,8 +2697,8 @@ check_feature_status(const char *feature_name, const char *feature_value,
 
 	len = snprintf(psql_cmd, sizeof(psql_cmd),
 			"\"%s%spsql\" -X -t -c \"show %s;\" -o \"%s\" -d \"postgres\"",
-			psqldir ? psqldir : "",
-			psqldir ? "/" : "",
+			bindir ? bindir : "",
+			bindir ? "/" : "",
 			feature_name,
 			statusfilename);
 
@@ -2921,7 +2917,7 @@ regression_main(int argc, char *argv[], init_function ifunc, test_function tfunc
 			case 16:
 				/* "--psqldir=" should mean to use PATH */
 				if (strlen(optarg))
-					psqldir = strdup(optarg);
+					bindir = strdup(optarg);
 				break;
 			case 17:
 				dlpath = strdup(optarg);
