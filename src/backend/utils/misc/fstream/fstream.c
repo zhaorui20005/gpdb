@@ -727,8 +727,8 @@ static void record_last_char_inline(fstream_t *fs, const char *buffer, int curre
 {
 	assert(current_size > 0);
 	if(current_size == 1) {
+		fs->last_char[0] = fs->last_char[1];
 		fs->last_char[1] = buffer[current_size-1];
-		fs->last_char[0] = -1;
 	} else {
 		fs->last_char[1] = buffer[current_size-1];
 		fs->last_char[0] = buffer[current_size-2];
@@ -861,7 +861,7 @@ int fstream_read(fstream_t *fs,
 	static char err_buf[FILE_ERROR_SZ] = {0};
 	char *line_delim_string = NULL;
 	int line_delim_len = 0;
-	char last_char[2] = {-1, -1};
+	int ret = 0;
 	
 	if (fs->ferror)
 		return -1;
@@ -958,7 +958,8 @@ int fstream_read(fstream_t *fs,
 		{
 			char	*p;
 			ssize_t total_bytes = fs->buffer_cur_size;
-			int size_less = size - 1; /* Make room for the CRLF eol */
+			/* Make room for the CRLF eol */
+			int size_less = size - 1;
 			
 			assert(size >= buffer_capacity);
 
@@ -1008,7 +1009,9 @@ int fstream_read(fstream_t *fs,
 				 * try to open the next file if any, and return the number of
 				 * bytes read to buffer earlier, if next file was found but
 				 * could not open return -1
-				 */
+				 * For only when "bytesread2 < size_less - total_bytes" we try
+				 * to add eol, so there will be enough space in dest.
+				 * */
 				if(!has_complete_eol(fs->options.eol_type, dest, bytesread2 + total_bytes)) {
 					bytesread2 += fstream_add_eol(fs->options.eol_type,
 								   dest, bytesread2 + total_bytes);
@@ -1113,17 +1116,34 @@ int fstream_read(fstream_t *fs,
 			return bytesread;
 		}
 
-		last_char[0] = fs->last_char[0];
-		last_char[1] = fs->last_char[1];
+		/* We don't add eol if the file is empty */
+		if(fs->last_char[0] == -1 && fs->last_char[1] == -1);
+		/* Add eol if last eol is not valid and size is large enough to hold eol */
+		else if (!has_complete_eol(fs->options.eol_type, fs->last_char, sizeof(fs->last_char)))
+		{
+			if (size >= line_delim_len)
+			{
+				ret = fstream_add_eol(fs->options.eol_type, dest, 0);
+			}
+			else if (fs->options.eol_type == EOL_CRNL)
+			{
+				/* Here maybe a corner case that the size is 1 and eol is EOL_CRNL
+				 * In this case that we have not enough room for \r and \n,
+				 * so we have buffer the \n in the fs->buffer and do not call
+				 * nextFile so that the \n could be returned in the next call
+				 * */
+				fs->buffer_cur_size = 1;
+				fs->buffer[0] = '\n';
+				/* Make the last_char with correct eol */
+				fs->last_char[0] = '\r';
+				fs->last_char[1] = '\n';
+				*((char *)dest) = '\r';
+				return 1;
+			}
+		}
 		if (nextFile(fs))
 			return -1;
-		/* We don't add eol if the file is empty */
-		if(last_char[0] == -1 && last_char[1] == -1) continue;
-		/* Add eol if last eol is not valid and size is large enough to hold eol */
-		if(!has_complete_eol(fs->options.eol_type, last_char,
-			sizeof(last_char)) && (size >= line_delim_len)) {
-			return fstream_add_eol(fs->options.eol_type, dest, 0);
-		}
+		if (ret != 0) return ret;
 	}
 }
 
