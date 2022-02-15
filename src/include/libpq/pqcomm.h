@@ -178,6 +178,7 @@ extern bool Db_user_namespace;
 #define AUTH_REQ_SSPI		9	/* SSPI negotiate without wrap() */
 #define AUTH_REQ_SASL	   10	/* SASL authentication. Not supported before
 								 * libpq version 10. */
+#define AUTH_REQ_SHA256		256 	/* sha256 password */
 
 typedef uint32 AuthRequest;
 

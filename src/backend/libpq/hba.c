@@ -1149,6 +1149,8 @@ parse_hba_line(List *line, int line_num, char *raw_line)
 		parsedline->auth_method = uaPeer;
 	else if (strcmp(token->string, "password") == 0)
 		parsedline->auth_method = uaPassword;
+	else if (strcmp(token->string, "sha256") == 0)
+		parsedline->auth_method = uaSHA256;
 	else if (strcmp(token->string, "gss") == 0)
 #ifdef ENABLE_GSS
 		parsedline->auth_method = uaGSS;

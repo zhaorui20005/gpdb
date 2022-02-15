@@ -194,6 +194,58 @@ hashed_passwd_verify(const Port *port, const char *role, char *client_pass,
 				pfree(crypt_pwd2);
 			}
 			break;
+		case uaSHA256:
+			crypt_pwd = palloc(SHA256_PASSWD_LEN + 1);
+			if (isSHA256(shadow_pass))
+			{
+				/* stored password already encrypted, only do salt */
+				if (!pg_sha256_encrypt(shadow_pass + strlen("sha256"),
+									(char *)port->md5Salt,
+									sizeof(port->md5Salt), crypt_pwd))
+				{
+					pfree(crypt_pwd);
+					return STATUS_ERROR;
+				}
+			}
+			else if (isMD5(shadow_pass))
+			{
+				/*
+  				 * Client supplied an SHA256 hashed password but our password
+ 				 * is stored as MD5 so we cannot compare the two.
+ 				 */
+				ereport(FATAL,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg("SHA256 authentication is not supported with "
+									   "MD5 hashed passwords"),
+								errhint("Set an alternative authentication method "
+										"for this role in pg_hba.conf")));
+			}
+			else
+			{
+				/* stored password is plain, double-encrypt */
+				char	   *crypt_pwd2 = palloc(SHA256_PASSWD_LEN + 1);
+
+				if (!pg_sha256_encrypt(shadow_pass,
+									   port->user_name,
+									   strlen(port->user_name),
+									   crypt_pwd2))
+				{
+					pfree(crypt_pwd2);
+					return STATUS_ERROR;
+				}
+				if (!pg_sha256_encrypt(crypt_pwd2 + strlen(SHA256_PREFIX),
+								(char *)port->md5Salt,
+									sizeof(port->md5Salt),
+									crypt_pwd))
+				{
+					pfree(crypt_pwd);
+					pfree(crypt_pwd2);
+					return STATUS_ERROR;
+				}
+				pfree(crypt_pwd2);
+			}
+			break;
+
 		default:
 			if (isMD5(shadow_pass))
 			{
@@ -242,7 +294,7 @@ hashed_passwd_verify(const Port *port, const char *role, char *client_pass,
 			retval = STATUS_OK;
 	}
 
-	if (port->hba->auth_method == uaMD5)
+	if (port->hba->auth_method == uaMD5 || port->hba->auth_method == uaSHA256)
 		pfree(crypt_pwd);
 	if (crypt_client_pass != client_pass)
 		pfree(crypt_client_pass);

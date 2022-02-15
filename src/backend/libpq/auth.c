@@ -670,6 +670,11 @@ ClientAuthentication(Port *port)
 			status = recv_and_check_password_packet(port, &logdetail);
 			break;
 
+		case uaSHA256:
+			sendAuthRequest(port, AUTH_REQ_SHA256);
+			status = recv_and_check_password_packet(port, &logdetail);
+			break;
+
 		case uaPAM:
 #ifdef USE_PAM
 			status = CheckPAMAuth(port, port->user_name, "");
@@ -740,7 +745,7 @@ sendAuthRequest(Port *port, AuthRequest areq)
 	pq_sendint(&buf, (int32) areq, sizeof(int32));
 
 	/* Add the salt for encrypted passwords. */
-	if (areq == AUTH_REQ_MD5)
+	if (areq == AUTH_REQ_MD5 || areq == AUTH_REQ_SHA256)
 		pq_sendbytes(&buf, port->md5Salt, 4);
 
 #if defined(ENABLE_GSS) || defined(ENABLE_SSPI)
