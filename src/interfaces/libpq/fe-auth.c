@@ -48,6 +48,7 @@
 #include "libpq-fe.h"
 #include "fe-auth.h"
 #include "libpq/md5.h"
+#include "libpq/pg_sha2.h"
 
 
 #ifdef ENABLE_GSS
@@ -544,6 +545,36 @@ pg_password_sendauth(PGconn *conn, const char *password, AuthRequest areq)
 				pwd_to_send = crypt_pwd;
 				break;
 			}
+		case AUTH_REQ_SHA256:
+			{
+				char	   *crypt_pwd2;
+			
+				/* Allocate enough space for two SHA256 hashes */
+				crypt_pwd = malloc(2 * (SHA256_PASSWD_LEN + 1));
+				if (!crypt_pwd)
+				{
+					printfPQExpBuffer(&conn->errorMessage,
+									  libpq_gettext("out of memory\n"));
+					return STATUS_ERROR;
+				}
+			
+				crypt_pwd2 = crypt_pwd + SHA256_PASSWD_LEN + 1;
+				if (!pg_sha256_encrypt(password, conn->pguser,
+									strlen(conn->pguser), crypt_pwd2))
+				{
+					free(crypt_pwd);
+					return STATUS_ERROR;
+				}
+				if (!pg_sha256_encrypt(crypt_pwd2 + strlen(SHA256_PREFIX), conn->md5Salt,
+									sizeof(conn->md5Salt), crypt_pwd))
+				{
+					free(crypt_pwd);
+					return STATUS_ERROR;
+				}
+			
+				pwd_to_send = crypt_pwd;
+				break;
+			}
 		case AUTH_REQ_PASSWORD:
 			pwd_to_send = password;
 			break;
@@ -693,6 +724,7 @@ pg_fe_sendauth(AuthRequest areq, PGconn *conn)
 					  libpq_gettext("Crypt authentication not supported\n"));
 			return STATUS_ERROR;
 
+		case AUTH_REQ_SHA256:
 		case AUTH_REQ_MD5:
 		case AUTH_REQ_PASSWORD:
 			conn->password_needed = true;

@@ -41,7 +41,7 @@ pg_sha256_encrypt(const char *pass, char *salt, size_t salt_len,
 				  char *cryptpass)
 {
 	size_t passwd_len = strlen(pass);
-	char *target = palloc(passwd_len + salt_len + 1);
+	char *target = malloc(passwd_len + salt_len + 1);
 	SHA256_CTX ctx;
 	uint8 digest[SHA256_DIGEST_LENGTH];
 
@@ -58,6 +58,7 @@ pg_sha256_encrypt(const char *pass, char *salt, size_t salt_len,
 	to_hex((uint8 *)digest, cryptpass + strlen(SHA256_PREFIX));
 
 	cryptpass[SHA256_PASSWD_LEN] = '\0';
+	free(target);
 
 	return true;
 }

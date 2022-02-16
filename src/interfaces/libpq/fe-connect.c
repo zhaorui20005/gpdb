@@ -2674,7 +2674,7 @@ keep_going:						/* We will come back to here until there is
 				}
 
 				/* Get the password salt if there is one. */
-				if (areq == AUTH_REQ_MD5)
+				if (areq == AUTH_REQ_MD5 || areq == AUTH_REQ_SHA256)
 				{
 					if (pqGetnchar(conn->md5Salt,
 								   sizeof(conn->md5Salt), conn))
