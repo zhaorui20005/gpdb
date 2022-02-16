@@ -276,6 +276,7 @@ auth_failed(Port *port, int status, char *logdetail)
 		case uaPeer:
 			errstr = gettext_noop("Peer authentication failed for user \"%s\"");
 			break;
+		case uaSHA256:
 		case uaPassword:
 		case uaMD5:
 			errstr = gettext_noop("password authentication failed for user \"%s\"");

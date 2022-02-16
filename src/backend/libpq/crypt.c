@@ -133,6 +133,22 @@ hashed_passwd_verify(const Port *port, const char *role, char *client_pass,
 			return STATUS_ERROR;	/* empty password */
 		}
 	}
+	else if (isSHA256(shadow_pass))
+	{
+		char		crypt_empty[SHA256_PASSWD_LEN + 1];
+
+		if (!pg_sha256_encrypt("",
+							port->user_name,
+							strlen(port->user_name),
+							crypt_empty))
+			return STATUS_ERROR;
+		if (strcmp(shadow_pass, crypt_empty) == 0)
+		{
+			*logdetail = psprintf(_("User \"%s\" has an empty password."),
+								  role);
+			return STATUS_ERROR;	/* empty password */
+		}
+	}
 
 	/*
 	 * Compare with the encrypted or plain password depending on the
