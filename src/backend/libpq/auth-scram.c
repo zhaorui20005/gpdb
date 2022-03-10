@@ -832,6 +832,7 @@ read_client_first_message(scram_state *state, char *input)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("client requires SCRAM channel binding, but it is not supported")));
+			break;
 		default:
 			ereport(ERROR,
 					(errcode(ERRCODE_PROTOCOL_VIOLATION),
