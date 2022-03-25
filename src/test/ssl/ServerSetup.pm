@@ -101,9 +101,9 @@ sub configure_test_server_for_ssl
 	if (defined($password))
 	{
 		$node->psql('postgres',
-"SET password_encryption='$password_enc'; ALTER USER ssltestuser PASSWORD '$password';");
+"SET password_hash_algorithm='$password_enc'; ALTER USER ssltestuser PASSWORD '$password';");
 		$node->psql('postgres',
-"SET password_encryption='$password_enc'; ALTER USER anotheruser PASSWORD '$password';");
+"SET password_hash_algorithm='$password_enc'; ALTER USER anotheruser PASSWORD '$password';");
 	}
 
 	# enable logging etc.
@@ -178,5 +178,4 @@ sub configure_hba_for_ssl
 	print $hba
 "hostssl certdb          ssltestuser     ::1/128                 cert\n";
 	close $hba;
->>>>>>> 9288d62bb4... Support channel binding 'tls-unique' in SCRAM
 }
