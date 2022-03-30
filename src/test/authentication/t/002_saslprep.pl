@@ -43,6 +43,7 @@ SKIP:
 	skip "authentication tests cannot run on Windows", 12 if ($windows_os);
 
 	# Initialize master node
+	$ENV{"LANG"} = 'en_US.UTF-8';
 	my $node = get_new_node('master');
 	$node->init;
 	$node->start;
