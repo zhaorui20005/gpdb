@@ -122,6 +122,9 @@ int			max_stack_depth = 100;
 /* wait N seconds to allow attach from a debugger */
 int			PostAuthDelay = 0;
 
+/* Time between checks that the client is still connected. */
+int         client_connection_check_interval = 0;
+
 
 /*
  * Hook for extensions, to get notified when query cancel or DIE signal is
@@ -236,7 +239,7 @@ static int	InteractiveBackend(StringInfo inBuf);
 static int	interactive_getc(void);
 static int	SocketBackend(StringInfo inBuf);
 static int	ReadCommand(StringInfo inBuf);
-static void forbidden_in_wal_sender(char firstchar);
+static void forbidden_in_wal_sender(int firstchar);
 static List *pg_rewrite_query(Query *query);
 static bool check_log_statement(List *stmt_list);
 static int	errdetail_execute(List *raw_parsetree_list);
@@ -3237,6 +3240,15 @@ start_xact_command(void)
 		else
 			disable_timeout(STATEMENT_TIMEOUT, false);
 
+		/* Start timeout for checking if the client has gone away if necessary. */
+		if (client_connection_check_interval > 0 &&
+			Gp_role != GP_ROLE_EXECUTE &&
+			IsUnderPostmaster &&
+			MyProcPort &&
+			!get_timeout_active(CLIENT_CONNECTION_CHECK_TIMEOUT))
+			enable_timeout_after(CLIENT_CONNECTION_CHECK_TIMEOUT,
+								 client_connection_check_interval);
+
 		xact_started = true;
 	}
 }
@@ -3800,6 +3812,27 @@ ProcessInterrupts(const char* filename, int lineno)
 						 errmsg("terminating connection due to administrator command")));
 		}
 	}
+
+	if (CheckClientConnectionPending)
+	{
+		CheckClientConnectionPending = false;
+
+		/*
+		 * Check for lost connection and re-arm, if still configured, but not
+		 * if we've arrived back at DoingCommandRead state.  We don't want to
+		 * wake up idle sessions, and they already know how to detect lost
+		 * connections.
+		 */
+		if (!DoingCommandRead && client_connection_check_interval > 0)
+		{
+			if (!pq_check_connection())
+				ClientConnectionLost = true;
+			else
+				enable_timeout_after(CLIENT_CONNECTION_CHECK_TIMEOUT,
+									 client_connection_check_interval);
+		}
+	}
+
 	if (ClientConnectionLost)
 	{
 		QueryCancelPending = false;		/* lost connection trumps QueryCancel */
@@ -4573,7 +4606,7 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
  * received, and is used to construct the error message.
  */
 static void
-check_forbidden_in_gpdb_handlers(char firstchar)
+check_forbidden_in_gpdb_handlers(int firstchar)
 {
 	if (am_ftshandler || am_faulthandler)
 	{
@@ -5749,7 +5782,7 @@ PostgresMain(int argc, char *argv[],
  * message was received, and is used to construct the error message.
  */
 static void
-forbidden_in_wal_sender(char firstchar)
+forbidden_in_wal_sender(int firstchar)
 {
 	if (am_walsender)
 	{
@@ -5935,4 +5968,12 @@ log_disconnections(int code, Datum arg __attribute__((unused)))
 					hours, minutes, seconds, msecs,
 					port->user_name, port->database_name, port->remote_host,
 				  port->remote_port[0] ? " port=" : "", port->remote_port)));
+}
+
+/*
+ * Whether request on cancel or termination have arrived?
+ */
+inline bool
+CancelRequested() {
+	return InterruptPending && (ProcDiePending || QueryCancelPending);
 }

@@ -5449,11 +5449,11 @@ readRecoveryCommandFile(void)
 	 */
 	if (StandbyModeRequested)
 	{
-		if (PrimaryConnInfo == NULL)
+		if (PrimaryConnInfo == NULL && recoveryRestoreCommand == NULL)
 			ereport(FATAL,
-					(errmsg("recovery command file \"%s\" primary_conninfo not specified",
+					(errmsg("recovery command file \"%s\" specified neither primary_conninfo nor restore_command",
 							RECOVERY_COMMAND_FILE),
-					 errhint("The database server in standby mode needs primary_connection to connect to primary.")));
+							errhint("The database server in standby mode needs either primary_conninfo or restore_command to poll for WAL.")));
 	}
 	else
 	{
@@ -7531,8 +7531,6 @@ StartupXLOG(void)
 	 * problem by making the new active segment have a new timeline ID.
 	 *
 	 * In a normal crash recovery, we can just extend the timeline we were in.
-	 *
-	 * GPDB: Greenplum doesn't support archive recovery.
 	 */
 	PrevTimeLineID = ThisTimeLineID;
 	if (ArchiveRecoveryRequested)
@@ -7713,12 +7711,10 @@ StartupXLOG(void)
 		/*
 		 * And finally, execute the recovery_end_command, if any.
 		 */
-#if 0
 		if (recoveryEndCommand)
 			ExecuteRecoveryCommand(recoveryEndCommand,
 								   "recovery_end_command",
 								   true);
-#endif
 	}
 
 	/*
