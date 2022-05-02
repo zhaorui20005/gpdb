@@ -279,7 +279,7 @@ url_curl_abort_callback(ResourceReleasePhase phase,
 static size_t
 header_callback(void *ptr_, size_t size, size_t nmemb, void *userp)
 {
-    URL_CURL_FILE *url = (URL_CURL_FILE *) userp;
+	URL_CURL_FILE *url = (URL_CURL_FILE *) userp;
 	char*		ptr = ptr_;
 	int 		len = size * nmemb;
 	int 		i;
@@ -295,12 +295,16 @@ header_callback(void *ptr_, size_t size, size_t nmemb, void *userp)
 	 * gpfdist, and later use it to report the error string in
 	 * check_response() to the database user.
 	 */
-	if (url->http_response == 0)
+	if (nmemb > 5 && strncmp(ptr, "HTTP/", strlen("HTTP/")) == 0)
 	{
+		if (url->http_response != NULL)
+		{
+			pfree(url->http_response);
+		}
 		int 	n = nmemb;
 		char* 	p;
 
-		if (n > 0 && 0 != (p = palloc(n+1)))
+		if (0 != (p = palloc(n+1)))
 		{
 			memcpy(p, ptr, n);
 			p[n] = 0;

@@ -3566,7 +3566,7 @@ static int request_set_transform(request_t *r)
 	 * we prepare a temporary file to hold it.	when the request is
 	 * done we'll forward the output as error messages.
 	 */
-	if (transform_stderr_server(tr))
+	if (r->is_get && transform_stderr_server(tr))
 	{
 		apr_pool_t*	 mp = r->pool;
 		apr_file_t*	 f = NULL;

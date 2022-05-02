@@ -849,6 +849,27 @@ subprocess_open(gfile_t* fd, const char* fpath, int for_write, int* rcode, const
 		fd->transform->for_write = 0;
 	}
 
+	/* Writable transform can only get error msg when fstream_write failed, so we try to keep only one errfile */
+	if (for_write)
+	{
+		const char*	 tempdir = NULL;
+		char*		 tempfilename = NULL;
+		apr_file_t*	 f = NULL;
+		if ((rv = apr_temp_dir_get(&tempdir, mp)) != APR_SUCCESS)
+		{
+			return subprocess_open_failed(rcode, rstring, "subprocess_open: failed to get temporary directory for stderr");
+		}
+
+		tempfilename = apr_pstrcat(mp, tempdir, "/stderrXXXXXX", NULL);
+		if ((rv = apr_file_mktemp(&f, tempfilename, APR_CREATE|APR_WRITE|APR_EXCL, mp)) != APR_SUCCESS)
+		{
+			return subprocess_open_failed(rcode, rstring, "subprocess_open: failed to create temporary file for stderr");
+		}
+
+		fd->transform->errfilename = tempfilename;
+		fd->transform->errfile = f;
+	}
+
 	/* setup child stderr */
 	if (fd->transform->errfile)
 	{
@@ -879,6 +900,9 @@ subprocess_open(gfile_t* fd, const char* fpath, int for_write, int* rcode, const
 	{
 		return subprocess_open_failed(rcode, rstring, "subprocess_open: apr_proc_create failed");
 	}
+	/* There is a little moment that if we write into fd->transform->proc.in, no 
+	 * error will be detected. issue number:9497 */
+	usleep(1000);
 
 	return 0;
 }
@@ -904,9 +928,13 @@ static ssize_t
 write_subprocess(gfile_t *fd, void *ptr, size_t size)
 {
 	apr_size_t      nbytes = size;
+	apr_status_t    rv;
 
-	apr_file_write(fd->transform->proc.in, ptr, &nbytes);
-	return nbytes;
+	rv = apr_file_write(fd->transform->proc.in, ptr, &nbytes);
+	if(rv == APR_SUCCESS)
+		return nbytes;
+	else
+		return -1;
 }
 
 static int
@@ -922,6 +950,13 @@ close_subprocess(gfile_t *fd)
 	    apr_file_close(fd->transform->proc.out);
         
 	rv = apr_proc_wait(&fd->transform->proc, &st, &why, APR_WAIT);
+	if (fd->transform->for_write && fd->transform->errfile)
+	{
+		apr_file_close(fd->transform->errfile);
+		apr_file_remove(fd->transform->errfilename, fd->transform->mp);
+		fd->transform->errfile = NULL;
+		fd->transform->errfilename = NULL;
+	}
 	if (APR_STATUS_IS_CHILD_DONE(rv)) 
 	{
 		gfile_printf_then_putc_newline("close_subprocess: done: why = %d, exit status = %d", why, st);
