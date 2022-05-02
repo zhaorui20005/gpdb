@@ -970,6 +970,37 @@ int fstream_read(fstream_t *fs,
 			return -1;
 	}
 }
+#ifdef GPFXDIST
+static void get_writable_transform_errfile(gfile_t* fd, char *buf, apr_size_t nbytes)
+{
+	apr_status_t rv;
+	/*
+ 	 * close and then re-open (for reading) the temporary file we've used to capture stderr
+ 	 * */
+	apr_file_flush(fd->transform->errfile);
+	apr_file_close(fd->transform->errfile);
+
+	if ((rv = apr_file_open(&fd->transform->errfile, fd->transform->errfilename,
+							APR_READ|APR_BUFFERED, APR_UREAD, fd->transform->mp)) == APR_SUCCESS)
+	{
+		if ((rv = apr_file_read(fd->transform->errfile, buf, &nbytes)) == APR_SUCCESS)
+		{
+			if (nbytes > 0)
+			{
+				buf[nbytes] = '\0';
+			}
+		}
+		apr_file_close(fd->transform->errfile);
+	}
+	else
+	{
+		snprintf(buf, nbytes, "Loading error message from file %s failed.", fd->transform->errfilename);
+	}
+	/* Keep the failed file */
+	fd->transform->errfile = NULL;
+	fd->transform->errfilename = NULL;
+}
+#endif
 
 int fstream_write(fstream_t *fs,
 				  void *buf,
@@ -1026,9 +1057,21 @@ int fstream_write(fstream_t *fs,
 
 	if (byteswritten < 0)
 	{
-                gfile_printf_then_putc_newline("cannot write into file, byteswritten=%d, size=%d, errno=%d, errmsg=%s", 
-                        byteswritten, size, errno, strerror(errno));
-		fs->ferror = "cannot write into file";
+#ifdef GPFXDIST
+		if (fs->fd.transform)
+		{
+			char errmsg_buffer[FILE_ERROR_SZ-1];
+			memset(errmsg_buffer, 0, FILE_ERROR_SZ-1);
+			get_writable_transform_errfile(&fs->fd, errmsg_buffer, FILE_ERROR_SZ-2);
+			fs->ferror = format_error(errmsg_buffer, "");
+		}
+		else
+#endif
+		{
+			gfile_printf_then_putc_newline("cannot write into file, byteswritten=%d, size=%d, errno=%d, errmsg=%s",
+										   byteswritten, size, errno, strerror(errno));
+			fs->ferror = "cannot write into file";
+		}
 		return -1;
 	}
 
