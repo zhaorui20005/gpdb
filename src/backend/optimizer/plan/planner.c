@@ -2748,6 +2748,11 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 			root->is_split_update = false;
 	}
 
+	extra.limit_needed = limit_needed(parse);
+	extra.limit_tuples = limit_tuples;
+	extra.count_est = count_est;
+	extra.offset_est = offset_est;
+
 	/*
 	 * Generate paths for the final_rel.  Insert all surviving paths, with
 	 * LockRows, Limit, and/or ModifyTable steps added if needed.
@@ -2879,6 +2884,41 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 															  offset_est, count_est);
 			}
 
+			/* exec final_rel push down for all_segments fdw */
+			if (final_rel->fdwroutine && final_rel->fdwroutine->GetForeignUpperPaths) {
+				RelOptInfo *pre_final_rel;
+
+				pre_final_rel = makeNode(RelOptInfo);
+				pre_final_rel->reloptkind = RELOPT_UPPER_REL;
+				pre_final_rel->relids = bms_copy(final_rel->relids);
+
+				/* cheap startup cost is interesting iff not all tuples to be retrieved */
+				pre_final_rel->consider_startup = final_rel->consider_startup;
+				pre_final_rel->consider_param_startup = false;
+				pre_final_rel->consider_parallel = false;	/* might get changed later */
+				pre_final_rel->reltarget = create_empty_pathtarget();
+				pre_final_rel->pathlist = NIL;
+				pre_final_rel->cheapest_startup_path = NULL;
+				pre_final_rel->cheapest_total_path = NULL;
+				pre_final_rel->cheapest_unique_path = NULL;
+				pre_final_rel->cheapest_parameterized_paths = NIL;
+
+				pre_final_rel->serverid = final_rel->serverid;
+				pre_final_rel->userid = final_rel->userid;
+				pre_final_rel->useridiscurrent = final_rel->useridiscurrent;
+				pre_final_rel->fdwroutine = final_rel->fdwroutine;
+				pre_final_rel->exec_location = final_rel->exec_location;
+
+				if (pre_final_rel->fdwroutine &&
+					pre_final_rel->fdwroutine->GetForeignUpperPaths)
+					pre_final_rel->fdwroutine->GetForeignUpperPaths(root, UPPERREL_FINAL,
+																	current_rel, pre_final_rel,
+																	&extra);
+				if (pre_final_rel->pathlist) {
+					set_cheapest(pre_final_rel);
+					path = pre_final_rel->cheapest_total_path;
+				}
+			}
 			/*
 			 * The subpath might be ordered by TLEs that we don't need
 			 * in the final result, and will therefore not be present in the
@@ -3019,16 +3059,11 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 		}
 	}
 
-	extra.limit_needed = limit_needed(parse);
-	extra.limit_tuples = limit_tuples;
-	extra.count_est = count_est;
-	extra.offset_est = offset_est;
-
 	/*
 	 * If there is an FDW that's responsible for all baserels of the query,
 	 * let it consider adding ForeignPaths.
 	 */
-	if (final_rel->fdwroutine &&
+	if (final_rel->exec_location != FTEXECLOCATION_ALL_SEGMENTS && final_rel->fdwroutine &&
 		final_rel->fdwroutine->GetForeignUpperPaths)
 		final_rel->fdwroutine->GetForeignUpperPaths(root, UPPERREL_FINAL,
 													current_rel, final_rel,
