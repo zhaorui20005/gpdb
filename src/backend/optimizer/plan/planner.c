@@ -4799,10 +4799,11 @@ create_ordinary_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 				 errdetail("Some of the datatypes only support hashing, while others only support sorting.")));
 
 	/*
-	 * If there is an FDW that's responsible for all baserels of the query,
-	 * let it consider adding ForeignPaths.
+	 * 	 If there is an FDW that's responsible for all baserels of the query,
+	 * 	 let it consider adding ForeignPaths.
+	 * 	 	 	 
 	 */
-	if (grouped_rel->fdwroutine &&
+	if (grouped_rel->exec_location != FTEXECLOCATION_ALL_SEGMENTS && grouped_rel->fdwroutine &&
 		grouped_rel->fdwroutine->GetForeignUpperPaths)
 		grouped_rel->fdwroutine->GetForeignUpperPaths(root, UPPERREL_GROUP_AGG,
 													  input_rel, grouped_rel,

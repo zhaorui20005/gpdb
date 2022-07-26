@@ -68,6 +68,7 @@
 #include "parser/parse_oper.h"
 #include "utils/lsyscache.h"
 #include "utils/selfuncs.h"
+#include "foreign/fdwapi.h"
 
 typedef enum
 {
@@ -160,7 +161,7 @@ typedef struct
 } cdb_multi_dqas_info;
 
 static void create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
-								   RelOptInfo *input_rel, RelOptInfo *output_rel);
+				RelOptInfo *input_rel, RelOptInfo *output_rel, GroupPathExtraData *extra);
 static List *get_common_group_tles(PathTarget *target,
 								   List *groupClause,
 								   List *rollups);
@@ -259,6 +260,8 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 	cdb_agg_planning_context ctx;
 	bool		can_sort;
 	bool		can_hash;
+	GroupPathExtraData *extra = NULL;
+	extra = (GroupPathExtraData *)((void *)agg_partial_costs - offsetof(GroupPathExtraData, agg_partial_costs));
 
 	/* The caller should've checked these already */
 	Assert(parse->hasAggs || parse->groupClause);
@@ -340,6 +343,11 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 										   parse->groupClause,
 										   ctx.rollups);
 
+	ctx.partial_rel->serverid = input_rel->serverid;
+	ctx.partial_rel->userid = input_rel->userid;
+	ctx.partial_rel->useridiscurrent = input_rel->useridiscurrent;
+	ctx.partial_rel->fdwroutine = input_rel->fdwroutine;
+	ctx.partial_rel->exec_location = input_rel->exec_location;
 	/*
 	 * For twostage grouping sets, we perform grouping sets aggregation in
 	 * partial stage and normal aggregation in final stage.
@@ -453,7 +461,7 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 	/*
 	 * All set, generate the two-stage paths.
 	 */
-	create_two_stage_paths(root, &ctx, input_rel, output_rel);
+	create_two_stage_paths(root, &ctx, input_rel, output_rel, extra);
 
 	/*
 	 * Aggregates with DISTINCT arguments are more complicated, and are not
@@ -631,7 +639,7 @@ cdb_create_twostage_distinct_paths(PlannerInfo *root,
 	/*
 	 * All set, generate the two-stage paths.
 	 */
-	create_two_stage_paths(root, &ctx, input_rel, output_rel);
+	create_two_stage_paths(root, &ctx, input_rel, output_rel, NULL);
 }
 
 /*
@@ -639,7 +647,7 @@ cdb_create_twostage_distinct_paths(PlannerInfo *root,
  */
 static void
 create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
-					   RelOptInfo *input_rel, RelOptInfo *output_rel)
+					   RelOptInfo *input_rel, RelOptInfo *output_rel, GroupPathExtraData *extra)
 {
 	Path	   *cheapest_path = input_rel->cheapest_total_path;
 
@@ -697,6 +705,10 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 		if (!cdbpathlocus_collocates_tlist(root, cheapest_path->locus, ctx->group_tles))
 			add_first_stage_hash_agg_path(root, cheapest_path, ctx);
 	}
+	if (ctx->partial_rel->fdwroutine &&
+			ctx->partial_rel->fdwroutine->GetForeignUpperPaths)
+		ctx->partial_rel->fdwroutine->GetForeignUpperPaths(root, UPPERREL_GROUP_AGG,
+								input_rel, ctx->partial_rel, extra);
 
 	/*
 	 * We now have partially aggregated paths in ctx->partial_rel. Consider
