@@ -159,12 +159,6 @@ external_beginscan(Relation relation, uint32 scancounter,
 	scan->fs_scancounter = scancounter;
 	scan->fs_noop = false;
 	scan->fs_file = NULL;
-	/*
-	 * GPDB_91_MERGE_FIXME: scan->raw_buf_done is used for custom external
-	 * table only now. Maybe we could refactor externalgettup_custom() to
-	 * remove it.
-	 */
-	scan->raw_buf_done = true; /* true so we will read data in first run */
 	scan->fs_formatter = NULL;
 	scan->fs_constraintExprs = NULL;
 	if (relation->rd_att->constr != NULL && relation->rd_att->constr->num_check > 0)
@@ -353,7 +347,6 @@ external_rescan(FileScanDesc scan)
 	scan->fs_pstate->fe_eof = false;
 	scan->fs_pstate->cur_lineno = 0;
 	scan->fs_pstate->cur_attname = NULL;
-	scan->raw_buf_done = true; /* true so we will read data in first run */
 	scan->fs_pstate->raw_buf_len = 0;
 }
 
@@ -953,21 +946,22 @@ externalgettup_custom(FileScanDesc scan)
 	CopyState	pstate = scan->fs_pstate;
 	FormatterData *formatter = scan->fs_formatter;
 	MemoryContext oldctxt = CurrentMemoryContext;
+	bool need_more_data = false;
 
 	Assert(formatter);
 
 	/* while didn't finish processing the entire file */
-	while (!(scan->raw_buf_done && pstate->fe_eof))
+	while (formatter->fmt_databuf.len > 0 || !pstate->fe_eof)
 	{
 		/* need to fill our buffer with data? */
-		if (scan->raw_buf_done)
+		if (formatter->fmt_databuf.len == 0 || need_more_data)
 		{
 			int			bytesread = external_getdata(scan->fs_file, pstate, pstate->raw_buf, RAW_BUF_SIZE);
 
 			if (bytesread > 0)
 			{
 				appendBinaryStringInfo(&formatter->fmt_databuf, pstate->raw_buf, bytesread);
-				scan->raw_buf_done = false;
+				need_more_data = false;
 			}
 
 			/* HEADER not yet supported ... */
@@ -976,7 +970,7 @@ externalgettup_custom(FileScanDesc scan)
 		}
 
 		/* while there is still data in our buffer */
-		while (!scan->raw_buf_done)
+		while (formatter->fmt_databuf.len > 0)
 		{
 			bool		error_caught = false;
 
@@ -1028,6 +1022,7 @@ externalgettup_custom(FileScanDesc scan)
 					{
 						formatter->fmt_databuf.cursor = formatter->fmt_databuf.len;
 					}
+					justifyDatabuf(&formatter->fmt_databuf);
 				}
 
 				FILEAM_HANDLE_ERROR;
@@ -1065,15 +1060,16 @@ externalgettup_custom(FileScanDesc scan)
 						 * Callee consumed all data in the buffer. Prepare
 						 * to read more data into it.
 						 */
-						scan->raw_buf_done = true;
+						need_more_data = true;
 						justifyDatabuf(&formatter->fmt_databuf);
-						continue;
+						break;
 
 					default:
 						elog(ERROR, "unsupported formatter notification (%d)",
 								formatter->fmt_notification);
 						break;
 				}
+				break; /* FMT_NEED_MORE_DATA */
 			}
 			else
 			{
