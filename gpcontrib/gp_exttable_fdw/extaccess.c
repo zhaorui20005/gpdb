@@ -972,7 +972,6 @@ externalgettup_custom(FileScanDesc scan)
 					{
 						formatter->fmt_databuf.cursor = formatter->fmt_databuf.len;
 					}
-					justifyDatabuf(&formatter->fmt_databuf);
 				}
 
 				FILEAM_HANDLE_ERROR;
@@ -1029,6 +1028,16 @@ externalgettup_custom(FileScanDesc scan)
 				ErrorIfRejectLimitReached(pstate->cdbsreh);
 			}
 		}
+	}
+	if (formatter->fmt_databuf.len > 0)
+	{
+		/*
+		 * The formatter needs more data, but we have reached
+		 * EOF. This is an error.
+		 */
+		ereport(WARNING,
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("unexpected end of file")));
 	}
 
 	/*
