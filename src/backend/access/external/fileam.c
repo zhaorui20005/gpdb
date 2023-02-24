@@ -1026,7 +1026,6 @@ externalgettup_custom(FileScanDesc scan)
 					{
 						formatter->fmt_databuf.cursor = formatter->fmt_databuf.len;
 					}
-					justifyDatabuf(&formatter->fmt_databuf);
 				}
 
 				FILEAM_HANDLE_ERROR;
@@ -1436,7 +1435,10 @@ external_getdata(URL_FILE *extfile, CopyState pstate, void *outbuf, int maxread)
 	 * CK: this code is very delicate. The caller expects this: - if url_fread
 	 * returns something, and the EOF is reached, it this call must return
 	 * with both the content and the fe_eof flag set. - failing to do so will
-	 * result in skipping the last line.
+	 * result in skipping the last line. But for custom protocol, it is not possible
+	 * to reach EOF when the bytesread > 0, so we need to give them a second
+	 * chance to reach EOF when the bytesread = 0, so the formatter is responsible
+	 * to deal with eof flag properly, otherwise infinite loop may be created.
 	 */
 	bytesread = url_fread((void *) outbuf, maxread, extfile, pstate);
 
