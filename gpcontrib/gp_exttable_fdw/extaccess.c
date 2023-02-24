@@ -893,12 +893,16 @@ externalgettup_custom(FileScanDesc scan)
 	FormatterData *formatter = scan->fs_formatter;
 	MemoryContext oldctxt = CurrentMemoryContext;
 	bool need_more_data = false;
+	int infinite_loop_detect = 0;
 
 	Assert(formatter);
 
 	/* while didn't finish processing the entire file */
 	while (formatter->fmt_databuf.len != 0 || !pstate->reached_eof)
 	{
+		if (infinite_loop_detect != 0) {
+			break;
+		}
 		/* need to fill our buffer with data? */
 		if (formatter->fmt_databuf.len == 0 || need_more_data)
 		{
@@ -1006,6 +1010,9 @@ externalgettup_custom(FileScanDesc scan)
 						 * Callee consumed all data in the buffer. Prepare
 						 * to read more data into it.
 						 */
+						if (pstate->reached_eof) {
+							infinite_loop_detect++;
+						}
 						need_more_data = true;
 						justifyDatabuf(&formatter->fmt_databuf);
 						break;
