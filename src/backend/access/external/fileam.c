@@ -947,14 +947,14 @@ externalgettup_custom(FileScanDesc scan)
 	FormatterData *formatter = scan->fs_formatter;
 	MemoryContext oldctxt = CurrentMemoryContext;
 	bool need_more_data = false;
-	int infinite_loop_detect = 0;
+	bool infinite_loop_detect = false;
 
 	Assert(formatter);
 
 	/* while didn't finish processing the entire file */
 	while (formatter->fmt_databuf.len > 0 || !pstate->fe_eof)
 	{
-		if (infinite_loop_detect != 0) {
+		if (infinite_loop_detect == true) {
 			break;
 		}
 		/* need to fill our buffer with data? */
@@ -1064,7 +1064,7 @@ externalgettup_custom(FileScanDesc scan)
 						 * to read more data into it.
 						 */
 						if (pstate->fe_eof) {
-							infinite_loop_detect++;
+							infinite_loop_detect = true;
 						}
 						need_more_data = true;
 						justifyDatabuf(&formatter->fmt_databuf);
@@ -1075,7 +1075,11 @@ externalgettup_custom(FileScanDesc scan)
 								formatter->fmt_notification);
 						break;
 				}
-				break; /* FMT_NEED_MORE_DATA */
+				/*
+				 * Only when (formatter->fmt_notification == FMT_NEED_MORE_DATA) could we got here.
+				 * We need to get more data from external source(call external_getdata()).
+				 */
+				break;
 			}
 			else
 			{
@@ -1438,7 +1442,7 @@ external_getdata(URL_FILE *extfile, CopyState pstate, void *outbuf, int maxread)
 	 * result in skipping the last line. But for custom protocol, it is not possible
 	 * to reach EOF when the bytesread > 0, so we need to give them a second
 	 * chance to reach EOF when the bytesread = 0, so the formatter is responsible
-	 * to deal with eof flag properly, otherwise infinite loop may be created.
+	 * for dealing with eof flag properly, otherwise infinite loop may be created.
 	 */
 	bytesread = url_fread((void *) outbuf, maxread, extfile, pstate);
 
