@@ -954,7 +954,7 @@ externalgettup_custom(FileScanDesc scan)
 	/* while didn't finish processing the entire file */
 	while (formatter->fmt_databuf.len > 0 || !pstate->fe_eof)
 	{
-		if (infinite_loop_detect == true) {
+		if (infinite_loop_detect) {
 			break;
 		}
 		/* need to fill our buffer with data? */
@@ -1076,7 +1076,7 @@ externalgettup_custom(FileScanDesc scan)
 						break;
 				}
 				/*
-				 * Only when (formatter->fmt_notification == FMT_NEED_MORE_DATA) could we got here.
+				 * We can only get here when (formatter->fmt_notification == FMT_NEED_MORE_DATA).
 				 * We need to get more data from external source(call external_getdata()).
 				 */
 				break;
