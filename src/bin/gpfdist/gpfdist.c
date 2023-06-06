@@ -174,6 +174,8 @@ static struct
 	int			w; /* The time used for session timeout in seconds */
 } opt = { 8080, 8080, 0, 0, 0, ".", 0, 0, -1, 5, 0, 32768, 0, 256, 0, 0, 0, 0 };
 
+static void *write_file_buffer = NULL;
+static size_t write_file_size = 1 << 24; /* 16M as start size */
 
 typedef union address
 {
@@ -219,6 +221,7 @@ struct session_t
 	const char* 	path;			/* path requested */
 	fstream_t* 		fstream;
 	int 			is_error;		/* error flag */
+	const char*		errmsg;			/* The real error message */
 	int 			nrequest;		/* # requests attached to this session */
 	int				is_get;     	/* true for GET, false for POST */
 	int*			active_segids;	/* array indexed by segid. used for write operations
@@ -340,7 +343,7 @@ static int setup_write(request_t* r);
 static void setup_do_close(request_t* r);
 static int session_attach(request_t* r);
 static void session_detach(request_t* r);
-static void session_end(session_t* s, int error);
+static void session_end(session_t* s, int error, const char *errmsg);
 static void session_free(session_t* s);
 static void session_active_segs_dump(session_t* session);
 static int session_active_segs_isempty(session_t* session);
@@ -1140,7 +1143,7 @@ static void request_end(request_t* r, int error, const char* errmsg)
 	{
 		gwarning(r, "request failure resulting in session failure: top = %d, bot = %d", r->outblock.top, r->outblock.bot);
 		if (s)
-			session_end(s, 1);
+			session_end(s, 1, "request failure resulting in session failure");
 	}
 	else
 	{
@@ -1177,14 +1180,8 @@ static int local_send(request_t *r, const char* buf, int buflen)
 			gwarning(r, "gpfdist_send failed - the connection was terminated by the client (%d: %s)", e, strerror(e));
 			/* close stream and release fd & flock on pipe file*/
 			if (r->session && r->is_get)
-				session_end(r->session, 0);
-			/* For post requests, the error msg may not be transmited
- 			 * to the client side because of network failure. So the 
- 			 * session has to be set an error to inform the client
- 			 * through the following request response with an 
- 			 * internal error. */
-			else if (r->session && !r->is_get)
-				session_end(r->session, 1);
+				session_end(r->session, 0, NULL);
+			/* For Post request, we did not send response successfully, so allow peer retry */
 		} else {
 			if (!ok) {
 				gwarning(r, "gpfdist_send failed - due to (%d: %s)", e, strerror(e));
@@ -1316,7 +1313,7 @@ session_get_block(const request_t* r, block_t* retblock, char* line_delim_str, i
 	if (session->is_error || 0 == session->fstream)
 	{
 		gprintln(NULL, "session_get_block: end session is_error: %d", session->is_error);
-		session_end(session, 0);
+		session_end(session, 0, NULL);
 		return 0;
 	}
 
@@ -1331,7 +1328,7 @@ session_get_block(const request_t* r, block_t* retblock, char* line_delim_str, i
 	{
 		gprintln(NULL, "session_get_block: end session due to EOF");
 		gcb.read_bytes += fstream_get_compressed_size(session->fstream);
-		session_end(session, 0);
+		session_end(session, 0, NULL);
 		return 0;
 	}
 
@@ -1341,7 +1338,7 @@ session_get_block(const request_t* r, block_t* retblock, char* line_delim_str, i
 	{
 		const char* ferror = fstream_get_error(session->fstream);
 		gwarning(NULL, "session_get_block end session due to %s", ferror);
-		session_end(session, 1);
+		session_end(session, 1, ferror);
 		return ferror;
 	}
 
@@ -1354,12 +1351,14 @@ session_get_block(const request_t* r, block_t* retblock, char* line_delim_str, i
 }
 
 /* finish the session - close the file */
-static void session_end(session_t* session, int error)
+static void session_end(session_t* session, int error, const char *errmsg)
 {
 	gprintln(NULL, "session end. id = %ld, is_error = %d, error = %d", session->id, session->is_error, error);
 
-	if (error)
+	if (error) {
 		session->is_error = error;
+		session->errmsg = errmsg;
+	}
 
 	if (session->fstream)
 	{
@@ -1665,7 +1664,7 @@ static int session_attach(request_t* r)
 	/* if error, send an error and close */
 	if (session->is_error)
 	{
-		http_error(r, FDIST_INTERNAL_ERROR, "session error");
+		http_error(r, FDIST_INTERNAL_ERROR, session->errmsg);
 		request_end(r, 1, 0);
 		return -1;
 	}
@@ -3019,7 +3018,6 @@ static void handle_post_request(request_t *r, int header_end)
 	switch (r->seq ) {
 		case OPEN_SEQ:
 			/* sequence number is 1, it's the first OPEN request */
-			session->seq_segs[r->segid] = r->seq;
 			goto done_processing_request;
 
 		case NO_SEQ:
@@ -3069,11 +3067,28 @@ static void handle_post_request(request_t *r, int header_end)
 				return;
 			}
 	}
+	if (write_file_buffer == NULL) {
+		write_file_buffer = malloc(write_file_size);
+		if (write_file_buffer == NULL) {
+			gwarning(r, "Cannot alloc memory for write_file_buffer");
+			exit(1);
+		}
+	}
+	if (r->in.davailable > (int)write_file_size) {
+		while(r->in.davailable > (int)write_file_size) {
+			write_file_size <<= 1;
+		}
+		write_file_buffer = realloc(write_file_buffer, write_file_size);
+		if (write_file_buffer == NULL) {
+			gwarning(r, "Cannot realloc memory for write_file_buffer");
+			exit(1);
+		}
+	}
 
 	/* create a buffer to hold the incoming raw data */
-	r->in.dbufmax = opt.m; /* size of max line size */
+	r->in.dbufmax = (int)write_file_size; /* size of max line size */
 	r->in.dbuftop = 0;
-	r->in.dbuf = palloc_safe(r, r->pool, r->in.dbufmax, "out of memory when allocating r->in.dbuf: %d bytes", r->in.dbufmax);
+	r->in.dbuf = (char *)write_file_buffer;
 
 	/* if some data come along with the request, copy it first */
 	data_start = strstr(r->in.hbuf, "\r\n\r\n");
@@ -3090,36 +3105,18 @@ static void handle_post_request(request_t *r, int header_end)
 		memcpy(r->in.dbuf, data_start, data_bytes_in_req);
 		r->in.dbuftop += data_bytes_in_req;
 		r->in.davailable -= data_bytes_in_req;
-
-		/* only write it out if no more data is expected */
-		if(r->in.davailable == 0)
-		{
-			wrote = fstream_write(session->fstream, r->in.dbuf, data_bytes_in_req, 1, r->line_delim_str, r->line_delim_length);
-			delay_watchdog_timer();
-			if(wrote == -1)
-			{
-				/* write error */
-				http_error(r, FDIST_INTERNAL_ERROR, fstream_get_error(session->fstream));
-				request_end(r, 1, 0);
-				return;
-			}
-		}
 	}
 
 	/*
 	 * we've consumed all data that came in the first buffer (with the request)
 	 * if we're still expecting more data, get it from socket now and process it.
 	 */
-	while(r->in.davailable > 0)
+	while (r->in.davailable > 0)
 	{
-		size_t want;
 		ssize_t n;
-		size_t buf_space_left = r->in.dbufmax - r->in.dbuftop;
-
-		if (r->in.davailable > buf_space_left)
-			want = buf_space_left;
-		else
-			want = r->in.davailable;
+		/* We can make sure that want is r->in.davailable is less than r->in.dbufmax - r->in.dbuftop,
+		 * so we just read the left size in the POST request */
+		size_t want = r->in.davailable;
 
 		/* read from socket into data buf */
 		n = gpfdist_receive(r, r->in.dbuf + r->in.dbuftop, want);
@@ -3136,7 +3133,8 @@ static void handle_post_request(request_t *r, int header_end)
 			if (!ok)
 			{
 				gwarning(r, "handle_post_request receive errno: %d, msg: %s", e, strerror(e));
-			    http_error(r, FDIST_INTERNAL_ERROR, "internal error");
+				/* Give another chance for retry */
+				http_error(r, FDIST_TIMEOUT, "recv() from segment error");
 				request_end(r, 1, 0);
 				return;
 			}
@@ -3150,48 +3148,31 @@ static void handle_post_request(request_t *r, int header_end)
 		}
 		else
 		{
-			/*gprint("received %d bytes from client\n", n);*/
-
+			r->in.davailable -= n;
 			r->bytes += n;
 			r->last = apr_time_now();
-			r->in.davailable -= n;
 			r->in.dbuftop += n;
-
-			/* if filled our buffer or no more data expected, write it */
-			if (r->in.dbufmax == r->in.dbuftop || r->in.davailable == 0)
-			{
-				/* only write up to end of last row */
-				wrote = fstream_write(session->fstream, r->in.dbuf, r->in.dbuftop, 1, r->line_delim_str, r->line_delim_length);
-				gdebug(r, "wrote %d bytes to file", wrote);
-				delay_watchdog_timer();
-
-				if (wrote == -1)
-				{
-					/* write error */
-					gwarning(r, "handle_post_request, write error: %s", fstream_get_error(session->fstream));
-					http_error(r, FDIST_INTERNAL_ERROR, fstream_get_error(session->fstream));
-					request_end(r, 1, 0);
-					return;
-				}
-				else if(wrote == r->in.dbuftop)
-				{
-					/* wrote the whole buffer. clean it for next round */
-					r->in.dbuftop = 0;
-				}
-				else
-				{
-					/* wrote up to last line, some data left over in buffer. move to front */
-					int bytes_left_over = r->in.dbuftop - wrote;
-
-					memmove(r->in.dbuf, r->in.dbuf + wrote, bytes_left_over);
-					r->in.dbuftop = bytes_left_over;
-				}
-			}
 		}
-
 	}
+	/* if filled our buffer or no more data expected, write it */
+	wrote = fstream_write(session->fstream, r->in.dbuf, r->in.dbuftop, 1, r->line_delim_str, r->line_delim_length);
+	gdebug(r, "wrote %d bytes to file", wrote);
+	delay_watchdog_timer();
 
-	session->seq_segs[r->segid] = r->seq;
+	if (wrote == -1)
+	{
+		/* write error */
+		gwarning(r, "handle_post_request, write error: %s", fstream_get_error(session->fstream));
+		http_error(r, FDIST_INTERNAL_ERROR, fstream_get_error(session->fstream));
+		request_end(r, 1, 0);
+		session_end(session, 1, fstream_get_error(session->fstream));
+		return;
+	}
+	else
+	{
+		/* wrote the whole buffer. clean it for next round */
+		r->in.dbuftop = 0;
+	}
 
 done_processing_request:
 
@@ -3199,8 +3180,14 @@ done_processing_request:
 	if (0 != http_ok(r))
 		request_end(r, 1, 0);
 	else
+	{
 		request_end(r, 0, 0); /* we're done! */
-
+		/* Only when send http_ok succeed will we set seq
+		 * OPEN_SEQ and normal seq, we just add 1
+		 * For duplicate case, we set it unchanged
+		 */
+		session->seq_segs[r->segid] = r->seq;
+	}
 }
 
 static int request_set_path(request_t *r, const char* d, char* p, char* pp, char* path)
