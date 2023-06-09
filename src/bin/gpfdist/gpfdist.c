@@ -1355,7 +1355,8 @@ static void session_end(session_t* session, int error, const char *errmsg)
 {
 	gprintln(NULL, "session end. id = %ld, is_error = %d, error = %d", session->id, session->is_error, error);
 
-	if (error) {
+	if (error) 
+	{
 		session->is_error = error;
 		session->errmsg = errmsg;
 	}
@@ -3067,26 +3068,31 @@ static void handle_post_request(request_t *r, int header_end)
 				return;
 			}
 	}
-	if (write_file_buffer == NULL) {
+	if (write_file_buffer == NULL) 
+	{
 		write_file_buffer = malloc(write_file_size);
-		if (write_file_buffer == NULL) {
+		if (write_file_buffer == NULL) 
+		{
 			gfatal(r, "Cannot alloc memory for write_file_buffer");
 		}
 	}
-	if (r->in.davailable > (int)write_file_size) {
-		while(r->in.davailable > (int)write_file_size) {
+	if (r->in.davailable > (int) write_file_size) 
+	{
+		while(r->in.davailable > (int) write_file_size) 
+		{
 			write_file_size <<= 1;
 		}
 		write_file_buffer = realloc(write_file_buffer, write_file_size);
-		if (write_file_buffer == NULL) {
+		if (write_file_buffer == NULL) 
+		{
 			gfatal(r, "Cannot realloc memory for write_file_buffer");
 		}
 	}
 
 	/* create a buffer to hold the incoming raw data */
-	r->in.dbufmax = (int)write_file_size; /* size of max line size */
+	r->in.dbufmax = (int) write_file_size; /* size of max line size */
 	r->in.dbuftop = 0;
-	r->in.dbuf = (char *)write_file_buffer;
+	r->in.dbuf = (char *) write_file_buffer;
 
 	/* if some data come along with the request, copy it first */
 	data_start = strstr(r->in.hbuf, "\r\n\r\n");
