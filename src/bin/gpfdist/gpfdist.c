@@ -1181,7 +1181,7 @@ static int local_send(request_t *r, const char* buf, int buflen)
 			/* close stream and release fd & flock on pipe file*/
 			if (r->session && r->is_get)
 				session_end(r->session, 0, NULL);
-			/* For Post request, we did not send response successfully, so allow peer retry */
+			/* For POST request, we did not send response successfully, so allow peer retry */
 		} else {
 			if (!ok) {
 				gwarning(r, "gpfdist_send failed - due to (%d: %s)", e, strerror(e));
@@ -3192,9 +3192,10 @@ done_processing_request:
 	else
 	{
 		request_end(r, 0, 0); /* we're done! */
-		/* Only when send http_ok succeed will we set seq
-		 * OPEN_SEQ and normal seq, we just add 1
-		 * For duplicate case, we set it unchanged
+		/* 
+		 * Only when send http_ok successfully will we set
+		 * OPEN_SEQ and normal seq, we just add 1.
+		 * For duplicate case, we set it unchanged.
 		 */
 		session->seq_segs[r->segid] = r->seq;
 	}
