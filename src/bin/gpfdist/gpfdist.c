@@ -3179,7 +3179,7 @@ static void handle_post_request(request_t *r, int header_end)
 	}
 	else
 	{
-		/* This shoule not be entered */
+		/* This should not be entered */
 		gwarning(r, "handle_post_request, left incomplete line: %d bytes", r->in.dbuftop - wrote);
 		r->in.dbuftop = 0;
 	}
