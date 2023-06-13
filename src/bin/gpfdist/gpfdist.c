@@ -174,8 +174,10 @@ static struct
 	int			w; /* The time used for session timeout in seconds */
 } opt = { 8080, 8080, 0, 0, 0, ".", 0, 0, -1, 5, 0, 32768, 0, 256, 0, 0, 0, 0 };
 
+#define START_BUFFER_SIZE (1 << 20) /* 1M as start size */
+#define MAXIMUM_BUFFER_SIZE (1 << 30) /* 1G as Maximum size */
 static void *write_file_buffer = NULL;
-static size_t write_file_size = 1 << 20; /* 1M as start size */
+static size_t write_file_size = START_BUFFER_SIZE;
 
 typedef union address
 {
@@ -3068,6 +3070,22 @@ static void handle_post_request(request_t *r, int header_end)
 				return;
 			}
 	}
+
+	if (r->in.davailable < 0 || r->in.davailable > MAXIMUM_BUFFER_SIZE)
+	{
+		http_error(r, FDIST_BAD_REQUEST, "invalid Content-Length");
+		gwarning(r, "got an request with invalid Content-Length: %d", r->in.davailable);
+		request_end(r, 1, 0);
+		return;
+	}
+
+	/*
+	 * The write_file_buffer is used by all POST request. The start buffer size will be 1M.
+	 * The maximum size will be 1G. We want all POST data fit in the write_file_buffer, so
+	 * that when network error happens, no data will be written into the fstream.
+	 * The sending buffer at segment size will be range from 32K to 128M, so 1G is large
+	 * enough to hold all the POST data.
+	 */
 	if (write_file_buffer == NULL) 
 	{
 		write_file_buffer = malloc(write_file_size);
