@@ -129,3 +129,22 @@ ALTER FOREIGN TABLE mpp_ft1 OPTIONS (drop use_remote_estimate);
 CREATE SCHEMA mpp_import_dest;
 IMPORT FOREIGN SCHEMA import_source FROM SERVER pgserver INTO mpp_import_dest;
 ERROR:  If mpp_execute = "multi servers", it doesn't support import foreign schema
+-- ===================================================================
+-- Test two-stage transaction commit for multi-server foreign table
+-- ===================================================================
+-- remote postgres server 2 -- listening port 5555 drop column
+\! env PGOPTIONS='' psql -p 5555 contrib_regression -c 'alter table "MPP_S 1"."T 1" drop column c2'
+ALTER TABLE
+insert into mpp_ft1 select i,i from generate_series(1,100) i;
+ERROR:  column "c2" of relation "T 1" does not exist
+CONTEXT:  remote SQL command: INSERT INTO "MPP_S 1"."T 1"(c1, c2) VALUES ($1, $2)
+\! env PGOPTIONS='' psql -p 5555 contrib_regression -c 'alter table "MPP_S 1"."T 1" add column c2 int'
+ALTER TABLE
+create table test_count(c1 int, c2 int);
+insert into test_count select * from mpp_ft1;
+select count(*) from test_count;
+ count 
+-------
+    10
+(1 row)
+

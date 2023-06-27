@@ -74,3 +74,14 @@ ALTER FOREIGN TABLE mpp_ft1 OPTIONS (drop use_remote_estimate);
 -- ===================================================================
 CREATE SCHEMA mpp_import_dest;
 IMPORT FOREIGN SCHEMA import_source FROM SERVER pgserver INTO mpp_import_dest;
+
+-- ===================================================================
+-- Test two-stage transaction commit for multi-server foreign table
+-- ===================================================================
+-- remote postgres server 2 -- listening port 5555 drop column
+\! env PGOPTIONS='' psql -p 5555 contrib_regression -c 'alter table "MPP_S 1"."T 1" drop column c2'
+insert into mpp_ft1 select i,i from generate_series(1,100) i;
+\! env PGOPTIONS='' psql -p 5555 contrib_regression -c 'alter table "MPP_S 1"."T 1" add column c2 int'
+create table test_count(c1 int, c2 int);
+insert into test_count select * from mpp_ft1;
+select count(*) from test_count;
