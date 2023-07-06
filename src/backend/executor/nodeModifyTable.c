@@ -2375,6 +2375,7 @@ ExecModifyTable(PlanState *pstate)
 	if (node->mt_done)
 		return NULL;
 
+	resultRelInfo = node->resultRelInfo + node->mt_whichplan;
 	if (Gp_role == GP_ROLE_EXECUTE && !Gp_is_writer)
 	{
 		/*
@@ -2389,7 +2390,8 @@ ExecModifyTable(PlanState *pstate)
 		 * The above query will error out during parse-analyze so not reach here.
 		 * If reaching here, some bugs must happen.
 		 */
-		elog(ERROR, "Reader Gang execute ModifyTable node, some bugs must happen");
+		if (get_rel_relkind(resultRelInfo ->ri_RelationDesc->rd_id) != RELKIND_FOREIGN_TABLE)
+			elog(ERROR, "Reader Gang execute ModifyTable node, some bugs must happen");
 	}
 
 	/*
@@ -2402,7 +2404,6 @@ ExecModifyTable(PlanState *pstate)
 	}
 
 	/* Preload local variables */
-	resultRelInfo = node->resultRelInfo + node->mt_whichplan;
 	subplanstate = node->mt_plans[node->mt_whichplan];
 	junkfilter = resultRelInfo->ri_junkFilter;
 	action_attno = resultRelInfo->ri_action_attno;

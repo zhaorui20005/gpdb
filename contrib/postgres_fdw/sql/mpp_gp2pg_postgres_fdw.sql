@@ -85,3 +85,17 @@ insert into mpp_ft1 select i,i from generate_series(1,100) i;
 create table test_count(c1 int, c2 int);
 insert into test_count select * from mpp_ft1;
 select count(*) from test_count;
+-- =====================================================================================
+-- Test two-stage insert multi-server foreign table when num_segments is larger then 3
+-- =====================================================================================
+\! env PGOPTIONS='' psql -p 5432 contrib_regression -c 'truncate "MPP_S 1"."T 1"'
+\! env PGOPTIONS='' psql -p 5555 contrib_regression -c 'truncate "MPP_S 1"."T 1"'
+alter server pgserver options(set num_segments '4', set multi_hosts 'localhost localhost localhost localhost', set multi_ports '5432 5432 5555 5555');
+\c
+truncate test_count;
+insert into mpp_ft1 select i, i from generate_series(1,100) as i;
+insert into test_count select * from mpp_ft1;
+select count(*) from test_count;
+alter server pgserver options(set num_segments '2', set multi_hosts 'localhost localhost', set multi_ports '5432 5555');
+\c
+
