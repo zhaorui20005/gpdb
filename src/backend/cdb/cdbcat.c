@@ -384,7 +384,7 @@ GpPolicyFetch(Oid tbloid)
 
 			ForeignTable *f = GetForeignTable(tbloid);
 
-			if (f->exec_location == FTEXECLOCATION_ALL_SEGMENTS || f->exec_location == FTEXECLOCATION_MULTI_SERVERS)
+			if (f->exec_location == FTEXECLOCATION_ALL_SEGMENTS)
 			{
 				/*
 				 * Currently, foreign tables do not support a distribution
@@ -395,6 +395,14 @@ GpPolicyFetch(Oid tbloid)
 				 * option is set to 'all segments'
 				 */
 				return createRandomPartitionedPolicy(getgpsegmentCount());
+			}
+			else if (f->exec_location == FTEXECLOCATION_MULTI_SERVERS)
+			{
+				ForeignServer *server = GetForeignServer(f->serverid);
+				if (server)
+					return createRandomPartitionedPolicy(server->num_segments);
+				else
+					return createRandomPartitionedPolicy(getgpsegmentCount());
 			}
 		}
 	}
