@@ -202,3 +202,4 @@ test: event_trigger
 test: fast_default
 test: stats
 test: createdb
+test: hba_conf
