@@ -148,12 +148,7 @@ ParseCommitRecord(uint8 info, xl_xact_commit *xlrec, xl_xact_parsed_commit *pars
 
 	if (parsed->xinfo & XACT_XINFO_HAS_IS_ONE_PHASE)
 	{
-		/*
-		 * If XACT_XINFO_HAS_IS_ONE_PHASE, this transaction must be one-phase,
-		 * we don't need read the value.
-		 */
 		parsed->is_one_phase = true;
-		data += sizeof(xl_xact_isonephase);
 	}
 }
 

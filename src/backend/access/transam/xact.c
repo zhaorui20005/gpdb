@@ -6822,7 +6822,6 @@ XactLogCommitRecord(TimestampTz commit_time,
 	xl_xact_origin xl_origin;
 	xl_xact_distrib xl_distrib;
 	xl_xact_deldbs xl_deldbs;
-	xl_xact_isonephase xl_isonephase;
 	XLogRecPtr recptr;
 	bool isOnePhaseQE = (Gp_role == GP_ROLE_EXECUTE && MyTmGxactLocal->isOnePhaseCommit);
 	bool isDtxPrepared = isPreparedDtxTransaction();
@@ -6928,7 +6927,6 @@ XactLogCommitRecord(TimestampTz commit_time,
 	if (XLogLogicalInfoActive() && info == XLOG_XACT_COMMIT && isOnePhaseQE)
 	{
 		xl_xinfo.xinfo |= XACT_XINFO_HAS_IS_ONE_PHASE;
-		xl_isonephase.is_one_phase = 1;
 	}
 
 	if (xl_xinfo.xinfo != 0)
@@ -6988,9 +6986,6 @@ XactLogCommitRecord(TimestampTz commit_time,
 
 	if (xl_xinfo.xinfo & XACT_XINFO_HAS_DISTRIB)
 		XLogRegisterData((char *) (&xl_distrib), sizeof(xl_xact_distrib));
-
-	if (xl_xinfo.xinfo & XACT_XINFO_HAS_IS_ONE_PHASE)
-		XLogRegisterData((char *) (&xl_isonephase), sizeof(xl_xact_isonephase));
 
 	/* we allow filtering by xacts */
 	XLogSetRecordFlags(XLOG_INCLUDE_ORIGIN);

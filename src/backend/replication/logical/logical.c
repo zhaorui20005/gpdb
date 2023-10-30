@@ -882,6 +882,10 @@ void distributed_forget_cb_wrapper(LogicalDecodingContext *ctx, DistributedTrans
 {
 
 	ctx->accept_writes = true;
+	if(ctx->callbacks.distributed_forget_cb == NULL)
+	{
+		return;
+	}
 	/* do the actual work: call callback */
 	ctx->callbacks.distributed_forget_cb(ctx, gxid, nsegs);
 }
