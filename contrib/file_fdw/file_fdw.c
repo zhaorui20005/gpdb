@@ -792,6 +792,26 @@ fileEndForeignScan(ForeignScanState *node)
 }
 
 /*
+ * Modify the filename in cstate->filename, and cstate->cdbsreh if any,
+ * for COPY ON SEGMENT.
+ *
+ * Replaces the "<SEGID>" token in the filename with this segment's ID.
+ */
+static char *
+fileMangleFileName(const char *filename)
+{
+	StringInfoData filepath;
+	char segid_buf[8];
+	snprintf(segid_buf, 8, "%d", GpIdentity.segindex);
+
+	initStringInfo(&filepath);
+	appendStringInfoString(&filepath, filename);
+
+	replaceStringInfoString(&filepath, "<SEG_DATA_DIR>", DataDir);
+	replaceStringInfoString(&filepath, "<SEGID>", segid_buf);
+	return filepath.data;
+}
+/*
  * fileAnalyzeForeignTable
  *		Test whether analyzing this foreign table is supported
  */
@@ -804,6 +824,7 @@ fileAnalyzeForeignTable(Relation relation,
 	bool		is_program;
 	List	   *options;
 	struct stat stat_buf;
+	ForeignTable *table = NULL;
 
 	/* Fetch options of foreign table */
 	fileGetOptions(RelationGetRelid(relation), &filename, &is_program, &options);
@@ -818,6 +839,15 @@ fileAnalyzeForeignTable(Relation relation,
 	if (is_program)
 		return false;
 
+	table = GetForeignTable(RelationGetRelid(relation));
+	if (Gp_role == GP_ROLE_DISPATCH && table->exec_location == FTEXECLOCATION_ALL_SEGMENTS) {
+		*totalpages = 10;
+		*func = gp_acquire_sample_rows_func;
+		return true;
+	}
+
+	/* Copy codes from MangleCopyFileName function */
+	filename = fileMangleFileName(filename);
 	/*
 	 * Get size of the file.  (XXX if we fail here, would it be better to just
 	 * return false to skip analyzing the table?)
