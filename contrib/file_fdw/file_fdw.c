@@ -792,10 +792,10 @@ fileEndForeignScan(ForeignScanState *node)
 }
 
 /*
- * Modify the filename in cstate->filename, and cstate->cdbsreh if any,
- * for COPY ON SEGMENT.
+ * Modify the filename when it contains <SEGID> or <SEG_DATA_DIR> if any.
  *
  * Replaces the "<SEGID>" token in the filename with this segment's ID.
+ * Replaces the "<SEG_DATA_DIR>" token in the filename with DataDir.
  */
 static char *
 fileMangleFileName(const char *filename)
@@ -841,7 +841,12 @@ fileAnalyzeForeignTable(Relation relation,
 
 	table = GetForeignTable(RelationGetRelid(relation));
 	if (Gp_role == GP_ROLE_DISPATCH && table->exec_location == FTEXECLOCATION_ALL_SEGMENTS) {
+		/* 
+		 * It is not easy to fetch all the reomte files from all segments, so
+		 * we set it to the same default value in estimate_size() 
+		 */
 		*totalpages = 10;
+		/* This function could dispatch gp_acquire_sample_rows to all segments */
 		*func = gp_acquire_sample_rows_func;
 		return true;
 	}
