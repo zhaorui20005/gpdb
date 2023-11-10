@@ -798,7 +798,7 @@ fileEndForeignScan(ForeignScanState *node)
  * Replaces the "<SEG_DATA_DIR>" token in the filename with DataDir.
  */
 static char *
-fileMangleFileName(const char *filename)
+fileFdwMangleFileName(const char *filename)
 {
 	StringInfoData filepath;
 	char segid_buf[8];
@@ -852,7 +852,7 @@ fileAnalyzeForeignTable(Relation relation,
 	}
 
 	/* Copy codes from MangleCopyFileName function */
-	filename = fileMangleFileName(filename);
+	filename = fileFdwMangleFileName(filename);
 	/*
 	 * Get size of the file.  (XXX if we fail here, would it be better to just
 	 * return false to skip analyzing the table?)
