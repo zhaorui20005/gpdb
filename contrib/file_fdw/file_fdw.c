@@ -840,7 +840,8 @@ fileAnalyzeForeignTable(Relation relation,
 		return false;
 
 	table = GetForeignTable(RelationGetRelid(relation));
-	if (Gp_role == GP_ROLE_DISPATCH && table->exec_location == FTEXECLOCATION_ALL_SEGMENTS) {
+	if (Gp_role == GP_ROLE_DISPATCH && table->exec_location == FTEXECLOCATION_ALL_SEGMENTS)
+	{
 		/* 
 		 * It is not easy to fetch all the reomte files from all segments, so
 		 * we set it to the same default value in estimate_size() 
@@ -852,7 +853,10 @@ fileAnalyzeForeignTable(Relation relation,
 	}
 
 	/* Copy codes from MangleCopyFileName function */
-	filename = fileFdwMangleFileName(filename);
+	if (table->exec_location == FTEXECLOCATION_ALL_SEGMENTS)
+	{
+		filename = fileFdwMangleFileName(filename);
+	}
 	/*
 	 * Get size of the file.  (XXX if we fail here, would it be better to just
 	 * return false to skip analyzing the table?)
