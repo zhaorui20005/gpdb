@@ -74,7 +74,7 @@ static void DecodeCommit(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 static void DecodeAbort(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 						xl_xact_parsed_abort *parsed, TransactionId xid);
 static void DecodeDistributedForget(LogicalDecodingContext *ctx,
-			                        xl_xact_parsed_distributed_forget *parsed);
+			                        xl_xact_parsed_distributed_forget *parsed, XLogRecPtr lsn);
 
 /* common function to decode tuples */
 static void DecodeXLogTuple(char *data, Size len, ReorderBufferTupleBuf *tup);
@@ -323,7 +323,7 @@ DecodeXactOp(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 				xlrec = (xl_xact_distributed_forget *) XLogRecGetData(r);
 				ParseDistributedForgetRecord(XLogRecGetInfo(buf->record), xlrec, &parsed);
 
-				DecodeDistributedForget(ctx, &parsed);
+				DecodeDistributedForget(ctx, &parsed, buf->endptr);
 				break;
 			}
 		default:
@@ -698,14 +698,11 @@ DecodeAbort(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
  */
 static void
 DecodeDistributedForget(LogicalDecodingContext *ctx,
-                        xl_xact_parsed_distributed_forget *parsed)
+                        xl_xact_parsed_distributed_forget *parsed, XLogRecPtr lsn)
 {
 	if(parsed->dbId != ctx->slot->data.database)
-	{
 		return;
-	}
-
-	distributed_forget_cb_wrapper(ctx, parsed->gxid, parsed->nsegs);
+	distributed_forget_cb_wrapper(ctx, parsed->gxid, parsed->nsegs, lsn);
 }
 
 /*

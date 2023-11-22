@@ -878,10 +878,10 @@ message_cb_wrapper(ReorderBuffer *cache, ReorderBufferTXN *txn,
 	error_context_stack = errcallback.previous;
 }
 
-void distributed_forget_cb_wrapper(LogicalDecodingContext *ctx, DistributedTransactionId gxid, int nsegs)
+void distributed_forget_cb_wrapper(LogicalDecodingContext *ctx, DistributedTransactionId gxid, int nsegs, XLogRecPtr lsn)
 {
-
 	ctx->accept_writes = true;
+	ctx->write_location = lsn;
 	if(ctx->callbacks.distributed_forget_cb == NULL)
 	{
 		return;
