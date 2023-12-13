@@ -252,9 +252,11 @@ ParseAbortRecord(uint8 info, xl_xact_abort *xlrec, xl_xact_parsed_abort *parsed)
 void
 ParseDistributedForgetRecord(uint8 info, xl_xact_distributed_forget *xlrec, xl_xact_parsed_distributed_forget *parsed)
 {
-	char* data = ((char *) xlrec) + MinSizeOfXactDistributedForget;
+	char *data = ((char *) xlrec) + MinSizeOfXactDistributedForget;
 
-	int xinfo = 0;
+	memset(parsed, 0, sizeof(*parsed));
+
+	uint32 xinfo = 0;
 	parsed->gxid = xlrec->gxid;
 
 	if (info & XLOG_XACT_HAS_INFO)

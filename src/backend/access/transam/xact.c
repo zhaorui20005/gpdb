@@ -1812,18 +1812,14 @@ RecordDistributedForgetCommitted(DistributedTransactionId gxid)
 
 	if (xl_xinfo.xinfo != 0)
 		info |= XLOG_XACT_HAS_INFO;
-
 	XLogBeginInsert();
-
-	XLogRegisterData((char *) &xlrec, sizeof(xl_xact_distributed_forget));
+	XLogRegisterData((char *) (&xlrec), sizeof(xl_xact_distributed_forget));
 
 	if (xl_xinfo.xinfo != 0)
 		XLogRegisterData((char *) (&xl_xinfo.xinfo), sizeof(xl_xinfo.xinfo));
 
 	if (xl_xinfo.xinfo & XACT_XINFO_HAS_NSEGS)
-	{
-		XLogRegisterData((char *) (&xl_nsegs), sizeof(xl_xact_nsegs));
-	}
+		XLogRegisterData((char *) (&xl_nsegs), sizeof(xl_nsegs));
 
 	if (xl_xinfo.xinfo & XACT_XINFO_HAS_DBINFO)
 		XLogRegisterData((char *) (&xl_dbinfo), sizeof(xl_dbinfo));
@@ -6913,6 +6909,9 @@ XactLogCommitRecord(TimestampTz commit_time,
 		xl_origin.origin_timestamp = replorigin_session_origin_timestamp;
 	}
 
+	/*
+	 * During logical decoding, we need the distributed transaction ID in the commit log record.
+	 */
 	if (isDtxPrepared || isOnePhaseQE || (XLogLogicalInfoActive() && info == XLOG_XACT_COMMIT_PREPARED))
 	{
 		xl_xinfo.xinfo |= XACT_XINFO_HAS_DISTRIB;
@@ -6920,9 +6919,10 @@ XactLogCommitRecord(TimestampTz commit_time,
 	}
 
 	/*
-	 * When QE commit prepared transaction, and the transaction is one-phase,
-	 * there will be no relative xlogs on master. 
-	 * We need to distinguish this special situation when we do logical decoding.
+	 * When QE commit transaction and the transaction is one-phase,
+	 * there will be no relative xlogs on coordinator.
+	 * We need to distinguish this special situation when we do logical decoding,
+	 * so we added a one-phase flag to the commit log record.
 	 */
 	if (XLogLogicalInfoActive() && info == XLOG_XACT_COMMIT && isOnePhaseQE)
 	{

@@ -166,7 +166,7 @@ typedef struct ReorderBufferTXN
 	TransactionId toplevel_xid;
 
 	DistributedTransactionId gxid;
-	bool is_one_phase;
+	bool 		is_one_phase;
 
 	/*
 	 * LSN of the first data carrying, WAL record with knowledge about this

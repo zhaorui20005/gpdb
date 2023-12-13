@@ -74,7 +74,7 @@ static void DecodeCommit(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 static void DecodeAbort(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 						xl_xact_parsed_abort *parsed, TransactionId xid);
 static void DecodeDistributedForget(LogicalDecodingContext *ctx,
-			                        xl_xact_parsed_distributed_forget *parsed, XLogRecPtr lsn);
+									xl_xact_parsed_distributed_forget *parsed, XLogRecPtr start_lsn, XLogRecPtr end_lsn);
 
 /* common function to decode tuples */
 static void DecodeXLogTuple(char *data, Size len, ReorderBufferTupleBuf *tup);
@@ -323,7 +323,7 @@ DecodeXactOp(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 				xlrec = (xl_xact_distributed_forget *) XLogRecGetData(r);
 				ParseDistributedForgetRecord(XLogRecGetInfo(buf->record), xlrec, &parsed);
 
-				DecodeDistributedForget(ctx, &parsed, buf->endptr);
+				DecodeDistributedForget(ctx, &parsed, buf->origptr, buf->endptr);
 				break;
 			}
 		default:
@@ -692,17 +692,23 @@ DecodeAbort(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 }
 
 /*
- * Parse XLOG_XACT_DISTRIBUTED_FORGET records.
+ * Parse XLOG_XACT_DISTRIBUTED_FORGET log records.
  * Handling 'xl_xact_parsed_distributed_forget' needn't get through ReorderBuffer,
- * so we directly call '*_cb_wrapper' in logical.c
+ * so we directly call 'distributed_forget_cb_wrapper'.
  */
 static void
 DecodeDistributedForget(LogicalDecodingContext *ctx,
-                        xl_xact_parsed_distributed_forget *parsed, XLogRecPtr lsn)
+						xl_xact_parsed_distributed_forget *parsed, XLogRecPtr start_lsn, XLogRecPtr end_lsn)
 {
-	if(parsed->dbId != ctx->slot->data.database)
+	/*
+	 * ‘DocodeCommit’ also does this check, because the log file
+	 * contains transaction logs of different databases, but the
+	 * logical decoding of each slot only targets a single database,
+	 * so it is necessary to filter out the logs of other databases.
+	 */
+	if(parsed->dbId != InvalidOid && parsed->dbId != ctx->slot->data.database)
 		return;
-	distributed_forget_cb_wrapper(ctx, parsed->gxid, parsed->nsegs, lsn);
+	distributed_forget_cb_wrapper(ctx, parsed->gxid, parsed->nsegs, start_lsn, end_lsn);
 }
 
 /*
