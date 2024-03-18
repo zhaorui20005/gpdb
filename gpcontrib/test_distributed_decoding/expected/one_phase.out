@@ -80,30 +80,30 @@ BEGIN
 END;
 $$ language plpgsql;
 -- Start test
-SELECT 'init' FROM create_slot_on_all_segments();
- ?column? 
-----------
- init
+SELECT * FROM create_slot_on_all_segments();
+ create_slot_on_all_segments 
+-----------------------------
+ 
 (1 row)
 
-SELECT 'init' FROM execute_one_phase_transaction();
- ?column? 
-----------
- init
+SELECT * FROM execute_one_phase_transaction();
+ execute_one_phase_transaction 
+-------------------------------
+ 
 (1 row)
 
-SELECT 'init' FROM test_one_phase();
-NOTICE:  result match
- ?column? 
-----------
- init
+SELECT * FROM test_one_phase();
+NOTICE:  result match  (seg0 slice1 10.117.190.134:7002 pid=8837)
+ test_one_phase 
+----------------
+ 
 (1 row)
 
 -- Clean
-SELECT 'init' FROM drop_slot_on_all_segments();
- ?column? 
-----------
- init
+SELECT * FROM drop_slot_on_all_segments();
+ drop_slot_on_all_segments 
+---------------------------
+ 
 (1 row)
 
 DROP TABLE test_table;

@@ -89,12 +89,12 @@ END;
 $$ language plpgsql;
 
 -- Start test
-SELECT 'init' FROM create_slot_on_all_segments();
-SELECT 'init' FROM execute_one_phase_transaction();
-SELECT 'init' FROM test_one_phase();
+SELECT * FROM create_slot_on_all_segments();
+SELECT * FROM execute_one_phase_transaction();
+SELECT * FROM test_one_phase();
 
 -- Clean
-SELECT 'init' FROM drop_slot_on_all_segments();
+SELECT * FROM drop_slot_on_all_segments();
 DROP TABLE test_table;
 DROP FUNCTION execute_one_phase_transaction;
 DROP FUNCTION test_one_phase;

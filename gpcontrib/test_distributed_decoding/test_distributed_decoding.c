@@ -63,7 +63,7 @@ static void pg_decode_message(LogicalDecodingContext *ctx,
 							  bool transactional, const char *prefix,
 							  Size sz, const char *message);
 static void pg_decode_distributed_forget(LogicalDecodingContext *ctx,
-										 DistributedTransactionId gxid, int nsegs);
+						DistributedTransactionId gxid, int nsegs, XLogRecPtr start_lsn);
 
 void
 _PG_init(void)
@@ -234,7 +234,6 @@ pg_output_begin(LogicalDecodingContext *ctx, TestDecodingData *data, ReorderBuff
 		appendStringInfo(ctx->out, "BEGIN %u", txn->xid);
 	else
 		appendStringInfoString(ctx->out, "BEGIN");
-
 	OutputPluginWrite(ctx, last_write);
 }
 
@@ -262,7 +261,7 @@ pg_decode_commit_txn(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 }
 
 static void pg_decode_distributed_forget(LogicalDecodingContext *ctx,
-										 DistributedTransactionId gxid, int nsegs)
+					DistributedTransactionId gxid, int nsegs, XLogRecPtr start_lsn)
 {
 	TestDecodingData *data = ctx->output_plugin_private;
 
@@ -271,7 +270,7 @@ static void pg_decode_distributed_forget(LogicalDecodingContext *ctx,
 		return;
 
 	OutputPluginPrepareWrite(ctx, true);
-	appendStringInfo(ctx->out, "DISTRIBUTED_FORGET %llu,%d segments", gxid, nsegs);
+	appendStringInfo(ctx->out, "DISTRIBUTED_FORGET %lu,%d segments", gxid, nsegs);
 	OutputPluginWrite(ctx, true);
 }
 
