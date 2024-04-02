@@ -1824,7 +1824,7 @@ RecordDistributedForgetCommitted(DistributedTransactionId gxid)
 	if (xl_xinfo.xinfo & XACT_XINFO_HAS_DBINFO)
 		XLogRegisterData((char *) (&xl_dbinfo), sizeof(xl_dbinfo));
 
-	XLogInsert(RM_XACT_ID, info);
+	XLogFlush(XLogInsert(RM_XACT_ID, info));
 }
 
 /*
