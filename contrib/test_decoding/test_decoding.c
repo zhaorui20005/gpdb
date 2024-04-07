@@ -205,6 +205,7 @@ pg_decode_shutdown(LogicalDecodingContext *ctx)
 
 	/* cleanup our own resources via memory context reset */
 	MemoryContextDelete(data->context);
+	PluginDistributedForgetCb = NULL;
 }
 
 /* BEGIN callback */
